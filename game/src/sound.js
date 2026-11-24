@@ -1,131 +1,153 @@
-// Procedural sound, no assets: a few WebAudio oscillators and noise bursts. Audio only
-// starts after the first user gesture (browsers block it before then) and M toggles mute.
-// Every call is a no-op until the context exists, so screenshots stay silent and safe.
-
+// Procedural sound for Neon Harbor: every effect is synthesized with WebAudio,
+// so the game loads no audio files and makes no network request. Sound only
+// starts after the player's first gesture (the browser's autoplay rule).
 export function createSound() {
-  let ctx = null;
-  let muted = false;
+  let context = null;
+  let master = null;
   let engineOsc = null;
   let engineGain = null;
+  let sirenOsc = null;
+  let sirenGain = null;
+  let sirenTimer = null;
+  let sirenHigh = false;
+  let enabled = true;
 
   function ensure() {
-    if (ctx) return true;
+    if (context) return true;
     try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return false;
-      ctx = new AC();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return false;
+      context = new AudioCtx();
+      master = context.createGain();
+      master.gain.value = 0.5;
+      master.connect(context.destination);
       return true;
     } catch {
       return false;
     }
   }
 
-  function unlock() {
-    if (ensure() && ctx.state === 'suspended') ctx.resume().catch(() => {});
+  function resume() {
+    if (!ensure()) return;
+    if (context.state === 'suspended') context.resume().catch(() => {});
   }
 
-  function tone(freq, dur, type, vol, slideTo) {
-    if (!ensure() || muted) return;
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = type || 'sine';
+  function blip(freq, dur, type, vol, slideTo) {
+    if (!ensure() || !enabled) return;
+    const t = context.currentTime;
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = type || 'square';
     osc.frequency.setValueAtTime(freq, t);
     if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
     gain.gain.setValueAtTime(vol || 0.12, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(master);
     osc.start(t);
-    osc.stop(t + dur);
+    osc.stop(t + dur + 0.02);
   }
 
-  function noise(dur, vol, lowpass) {
-    if (!ensure() || muted) return;
-    const t = ctx.currentTime;
-    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
-    const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+  function noiseBurst(dur, vol, low) {
+    if (!ensure() || !enabled) return;
+    const t = context.currentTime;
+    const len = Math.floor(context.sampleRate * dur);
+    const buffer = context.createBuffer(1, len, context.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const filter = context.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = lowpass || 1200;
-    const gain = ctx.createGain();
+    filter.frequency.value = low || 900;
+    const gain = context.createGain();
     gain.gain.setValueAtTime(vol || 0.2, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(filter);
+    source.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
-    src.start(t);
+    gain.connect(master);
+    source.start(t);
   }
 
   return {
-    unlock,
-    toggleMute() {
-      muted = !muted;
-      if (muted && engineOsc) {
-        try { engineOsc.stop(); } catch { /* already stopped */ }
-        engineOsc = null;
-        engineGain = null;
-      }
-      return muted;
+    unlock() {
+      resume();
     },
-    get muted() {
-      return muted;
+    setEnabled(on) {
+      enabled = on;
     },
     punch() {
-      noise(0.09, 0.25, 900);
+      noiseBurst(0.09, 0.25, 700);
+      blip(140, 0.08, 'sine', 0.16, 70);
     },
     hit() {
-      tone(140, 0.18, 'sawtooth', 0.14, 70);
-    },
-    crime() {
-      tone(660, 0.12, 'square', 0.07);
-      setTimeout(() => tone(880, 0.14, 'square', 0.07), 120);
+      noiseBurst(0.12, 0.2, 500);
     },
     pickup() {
-      tone(523, 0.1, 'sine', 0.12);
-      setTimeout(() => tone(784, 0.16, 'sine', 0.12), 100);
+      blip(660, 0.09, 'sine', 0.14);
+      setTimeout(() => blip(990, 0.12, 'sine', 0.14), 90);
     },
     mission() {
-      tone(523, 0.12, 'sine', 0.13);
-      setTimeout(() => tone(659, 0.12, 'sine', 0.13), 110);
-      setTimeout(() => tone(784, 0.22, 'sine', 0.13), 220);
+      [523, 659, 784, 1046].forEach((freq, i) => setTimeout(() => blip(freq, 0.16, 'triangle', 0.16), i * 110));
     },
     busted() {
-      tone(392, 0.25, 'sawtooth', 0.12, 196);
-      setTimeout(() => tone(196, 0.4, 'sawtooth', 0.12, 98), 240);
+      [392, 311, 233].forEach((freq, i) => setTimeout(() => blip(freq, 0.25, 'sawtooth', 0.1), i * 160));
     },
-    /** Engine hum that follows the car speed; call every frame while driving. */
-    engine(speed, driving) {
-      if (!ensure() || muted || !driving) {
-        if (engineOsc) {
-          try { engineOsc.stop(); } catch { /* already stopped */ }
-          engineOsc = null;
-          engineGain = null;
-        }
-        return;
-      }
+    click() {
+      blip(880, 0.05, 'square', 0.08);
+    },
+    cash() {
+      blip(1320, 0.07, 'sine', 0.12);
+      setTimeout(() => blip(1760, 0.1, 'sine', 0.12), 70);
+    },
+    // Engine hum that follows the car's speed; call every frame while driving.
+    engine(speed01) {
+      if (!ensure() || !enabled) return;
       if (!engineOsc) {
-        engineOsc = ctx.createOscillator();
+        engineOsc = context.createOscillator();
+        engineGain = context.createGain();
         engineOsc.type = 'sawtooth';
-        engineGain = ctx.createGain();
-        engineGain.gain.value = 0.035;
-        const filter = ctx.createBiquadFilter();
+        engineGain.gain.value = 0;
+        const filter = context.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.value = 420;
         engineOsc.connect(filter);
         filter.connect(engineGain);
-        engineGain.connect(ctx.destination);
+        engineGain.connect(master);
         engineOsc.start();
       }
-      engineOsc.frequency.setTargetAtTime(55 + Math.abs(speed) * 0.28, ctx.currentTime, 0.08);
+      const target = speed01 > 0.02 ? 0.05 + speed01 * 0.06 : 0;
+      engineGain.gain.setTargetAtTime(target, context.currentTime, 0.08);
+      engineOsc.frequency.setTargetAtTime(55 + speed01 * 130, context.currentTime, 0.08);
     },
-    /** A short two-tone siren blip, throttled by the caller. */
-    siren(high) {
-      tone(high ? 960 : 720, 0.22, 'triangle', 0.045);
+    // Two-tone police siren while wanted; call with true/false to start/stop.
+    siren(on) {
+      if (!ensure() || !enabled) {
+        on = false;
+      }
+      if (on && !sirenOsc) {
+        sirenOsc = context.createOscillator();
+        sirenGain = context.createGain();
+        sirenOsc.type = 'triangle';
+        sirenGain.gain.value = 0.045;
+        sirenOsc.connect(sirenGain);
+        sirenGain.connect(master);
+        sirenOsc.start();
+        sirenHigh = false;
+        sirenTimer = setInterval(() => {
+          sirenHigh = !sirenHigh;
+          if (sirenOsc) sirenOsc.frequency.setTargetAtTime(sirenHigh ? 880 : 660, context.currentTime, 0.05);
+        }, 420);
+      } else if (!on && sirenOsc) {
+        clearInterval(sirenTimer);
+        sirenTimer = null;
+        const osc = sirenOsc;
+        const gain = sirenGain;
+        sirenOsc = null;
+        sirenGain = null;
+        gain.gain.setTargetAtTime(0, context.currentTime, 0.05);
+        setTimeout(() => { try { osc.stop(); } catch { /* already stopped */ } }, 300);
+      }
     },
   };
 }

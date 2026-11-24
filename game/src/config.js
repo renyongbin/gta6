@@ -1,103 +1,109 @@
-// Neon Harbor — a top-down open-world crime game. Every tuning number and colour in one
-// place. The world is a fixed 2560x1920 city; the renderer shows a 1280x720 window of it and
-// the camera follows the player, so no rule below depends on the screen size.
+// Neon Harbor — tuning and constants. Every number here is the game's own.
+// The city is a sun-soaked harbor town: a road grid, a waterfront in the south,
+// neon signs on a few rooftops. All art is drawn in code; no assets are loaded.
+export const WORLD = {
+  width: 2400,
+  height: 1800,
+  // Harbor water occupies the southern band; the promenade runs along its edge.
+  waterTop: 1500,
+  roadWidth: 92,
+  sidewalk: 16,
+};
 
-export const WORLD = { width: 2560, height: 1920 };
+export const ROADS_X = [300, 700, 1100, 1500, 1900];
+export const ROADS_Y = [250, 600, 950, 1300];
 
-/** City grid: streets every BLOCK units, each ROAD wide, along the top/left edge of a block. */
-export const BLOCK = 320;
-export const ROAD = 96;
-
-/** The camera's logical view, in world units. */
-export const VIEW = { width: 1280, height: 720 };
-
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
+export const COLORS = {
+  grass: '#8fae5d',
+  block: '#d9c9a3',
+  road: '#3d3a38',
+  roadLine: '#e8d44d',
+  sidewalk: '#b7ab8e',
+  water: '#2e7f9e',
+  waterDeep: '#256b87',
+  sand: '#e3d3a4',
+  pier: '#8a6b4f',
+  buildingRoof: ['#c96f4a', '#d9a441', '#7d9b6a', '#b0523c', '#5f7fa3', '#a37d4f'],
+  buildingWall: ['#e8dcc0', '#f0e6cc', '#dcc7a0', '#e5d3ae'],
+  neon: ['#ff4fa3', '#37e0ff', '#ffe14d', '#7cfc66'],
+  palm: '#3f7d3a',
+  player: '#ffd94d',
+  playerDark: '#2b2b2b',
+  police: '#2f6fd0',
+  policeLight: '#ff3b30',
+  thug: '#7a3b2e',
+  ped: ['#e2725b', '#5b8dd9', '#e0a458', '#8a6fb0', '#4fae7d'],
+  car: ['#d94f3d', '#3d7dd9', '#e8b73d', '#7ddb6a', '#c9c9c9', '#8a5fd0'],
+};
 
 export const PLAYER = {
+  walkSpeed: 175,
+  runSpeed: 265,
   radius: 14,
-  walkSpeed: 230,
   health: 100,
-  punchRange: 46,
+  punchRange: 36,
+  punchArc: 1.15,
   punchDamage: 34,
   punchCooldown: 0.38,
-  invulnerable: 1.0,
 };
 
 export const CAR = {
-  accel: 520,
-  brake: 700,
-  maxSpeed: 460,
-  reverseMax: 150,
-  turnRate: 2.6,
-  length: 54,
-  width: 26,
+  accel: 430,
+  brake: 640,
+  reverseAccel: 260,
+  maxSpeed: 440,
+  maxReverse: 150,
+  turnRate: 2.7,
+  radius: 20,
+  drag: 0.55,
 };
 
-export const TRAFFIC = { count: 14, speedMin: 110, speedMax: 175 };
-
-export const PED = { count: 22, speedMin: 28, speedMax: 55 };
-
-export const POLICE = {
-  /** Police cars per wanted star, capped. */
-  perStar: 1,
-  maxCars: 6,
-  speed: 430,
-  ramDamage: 12,
-  /** Seconds a police car must stay touching the player on foot to bust them. */
-  arrestTime: 2.2,
-};
-
-export const THUG = { health: 100, speed: 150, damage: 9, punchRange: 40, punchCooldown: 0.9, count: 4 };
+export const TRAFFIC = { count: 14, speedMin: 90, speedMax: 150 };
+export const PEDS = { count: 26, speedMin: 28, speedMax: 55 };
+export const THUGS = { count: 4 };
 
 export const WANTED = {
-  max: 5,
-  /** Seconds after the last crime before stars start to fall. */
-  decayDelay: 22,
-  /** Seconds between star drops once decaying. */
-  decayInterval: 9,
+  decayDelay: 16, // seconds without a crime before stars start falling
+  decayStep: 6, // seconds per star lost
+  maxStars: 5,
+  policePerStar: 1,
+  policeSpeed: 335,
+  policeRamDamage: 14,
+  bustedHold: 0.9, // seconds of police contact on foot before busted
 };
 
-/** Money the player starts with, and what each mission pays. */
-export const START_MONEY = 250;
+export const MISSIONS = [
+  {
+    id: 'pickup',
+    title: 'Harbor Pickup',
+    text: 'Steal a car and drive it to the garage',
+    type: 'driveTo',
+    target: { x: 1500, y: 950, r: 70 },
+    needCar: true,
+    reward: 150,
+  },
+  {
+    id: 'rook',
+    title: 'Meet Rook',
+    text: 'On foot: meet Rook at the end of the pier',
+    type: 'walkTo',
+    target: { x: 1180, y: 1690, r: 46 },
+    needCar: false,
+    reward: 200,
+  },
+  {
+    id: 'escape',
+    title: 'Hot Escape',
+    text: 'The heat is on — lose the cops at the safehouse',
+    type: 'escapeTo',
+    target: { x: 300, y: 250, r: 70 },
+    needCar: false,
+    setWanted: 3,
+    reward: 400,
+  },
+];
 
-export const PALETTE = {
-  backdrop: '#14101f',
-  sky: '#1a1430',
-  grass: '#233d2b',
-  water: '#16324a',
-  sand: '#3a2f28',
-  road: '#23232e',
-  roadEdge: '#3a3a4a',
-  lane: '#c9a227',
-  sidewalk: '#4a4658',
-  buildingA: '#5b4a7a',
-  buildingB: '#7a4a5e',
-  buildingC: '#3f6a72',
-  buildingD: '#8a6a3f',
-  buildingE: '#4a5e8a',
-  roof: '#2c2438',
-  park: '#2c5a34',
-  player: '#ffd23f',
-  playerCar: '#e8483f',
-  traffic: ['#7fb069', '#4a90d9', '#c9c9c9', '#e07b39', '#9b7ede'],
-  police: '#2b4acb',
-  policeLight: '#ff2e4d',
-  ped: ['#e8e3d9', '#d9a05b', '#8ab4f8', '#f28bb1', '#a3e635'],
-  thug: '#b91c1c',
-  marker: '#22d3ee',
-  markerPickup: '#facc15',
-  markerEscape: '#34d399',
-  text: '#f2ead8',
-  muted: '#a89ec4',
-  panel: '#1e1830',
-  star: '#ffd23f',
-  health: '#4ade80',
-  healthLow: '#ef4444',
-  money: '#4ade80',
-};
+export const SAVE_KEY = 'neon-harbor-save-v1';
 
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** Where progress is kept between visits (this browser only). */
-export const SAVE_KEY = 'neon-harbor.save.v1';
+// Screenshot scenes, driven by ?shot=<name>&seed=<n> in the URL.
+export const SHOTS = ['start', 'play', 'end', 'pickup'];

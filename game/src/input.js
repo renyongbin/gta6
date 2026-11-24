@@ -1,73 +1,61 @@
-// Keyboard and pointer input for an open-world game. Held keys give a movement vector
-// (WASD or arrows); one-shot presses (confirm, pause, enter/exit a car, attack, mute) are
-// queued as bit flags and taken once by the loop, so a press between two frames is never lost
-// and never counted twice.
-
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
-export const ACTION_ENTER = 4;
-export const ACTION_ATTACK = 8;
-export const ACTION_MUTE = 16;
+// Keyboard input for Neon Harbor. Held keys give a move vector; one-shot presses
+// (punch, steal a car, confirm, pause) are queued as flags and taken once by the
+// loop, so a press between two frames is never lost and never counted twice.
+export const ACT_PUNCH = 1;
+export const ACT_ENTER_CAR = 2;
+export const ACT_CONFIRM = 4;
+export const ACT_PAUSE = 8;
 
 const UP = new Set(['ArrowUp', 'KeyW']);
 const DOWN = new Set(['ArrowDown', 'KeyS']);
 const LEFT = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
-const ENTER = new Set(['KeyE']);
-const ATTACK = new Set(['Space']);
-const MUTE = new Set(['KeyM']);
+const RUN = new Set(['ShiftLeft', 'ShiftRight']);
 
-export function createInput(target) {
-  const held = { up: false, down: false, left: false, right: false };
+export function createInput(canvas) {
+  const held = new Set();
   let actions = 0;
 
-  window.addEventListener('keydown', (event) => {
-    if (UP.has(event.code)) held.up = true;
-    else if (DOWN.has(event.code)) held.down = true;
-    else if (LEFT.has(event.code)) held.left = true;
-    else if (RIGHT.has(event.code)) held.right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else if (ENTER.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_ENTER;
-    } else if (ATTACK.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_ATTACK;
-    } else if (MUTE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_MUTE;
-    } else return;
+  function press(event) {
+    if (event.repeat) return;
+    if (event.code === 'Space') actions |= ACT_PUNCH;
+    else if (event.code === 'KeyE') actions |= ACT_ENTER_CAR;
+    else if (event.code === 'Enter') actions |= ACT_CONFIRM;
+    else if (event.code === 'KeyP' || event.code === 'Escape') actions |= ACT_PAUSE;
+    else return;
     event.preventDefault();
+  }
+
+  window.addEventListener('keydown', (event) => {
+    held.add(event.code);
+    press(event);
+    if (UP.has(event.code) || DOWN.has(event.code) || LEFT.has(event.code) || RIGHT.has(event.code) || event.code === 'Space') {
+      event.preventDefault();
+    }
   });
-  window.addEventListener('keyup', (event) => {
-    if (UP.has(event.code)) held.up = false;
-    else if (DOWN.has(event.code)) held.down = false;
-    else if (LEFT.has(event.code)) held.left = false;
-    else if (RIGHT.has(event.code)) held.right = false;
-  });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    held.up = false;
-    held.down = false;
-    held.left = false;
-    held.right = false;
-  });
-  // Clicking attacks on foot and confirms on menus; the loop uses whichever fits the screen.
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM | ACTION_ATTACK;
+  window.addEventListener('keyup', (event) => held.delete(event.code));
+  // A key released while the tab is hidden never sends keyup: let go on blur.
+  window.addEventListener('blur', () => held.clear());
+  canvas.addEventListener('pointerdown', () => {
+    actions |= ACT_CONFIRM;
   });
 
+  function has(keys) {
+    for (const code of keys) if (held.has(code)) return true;
+    return false;
+  }
+
   return {
-    /** Movement vector, each component -1, 0 or 1 (diagonals are not normalised here). */
-    axis() {
-      return {
-        x: (held.right ? 1 : 0) - (held.left ? 1 : 0),
-        y: (held.down ? 1 : 0) - (held.up ? 1 : 0),
-      };
+    // Move vector, -1..1 on each axis, from WASD / arrow keys.
+    move() {
+      const x = (has(RIGHT) ? 1 : 0) - (has(LEFT) ? 1 : 0);
+      const y = (has(DOWN) ? 1 : 0) - (has(UP) ? 1 : 0);
+      return { x, y };
     },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
+    running() {
+      return has(RUN);
+    },
+    // The one-shot presses since the last call, as ACT_* flags.
     takeActions() {
       const taken = actions;
       actions = 0;
